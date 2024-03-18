@@ -35,16 +35,14 @@ pub mod reexports {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(crate = "serde"))]
 #[derive(Clone, Debug)]
-pub struct Bloom<T: ?Sized> {
+pub struct Bloom {
     bit_vec: BitVec,
     bitmap_bits: u64,
     k_num: u32,
     sips: [SipHasher13; 2],
-
-    _phantom: PhantomData<T>,
 }
 
-impl<T: ?Sized> Bloom<T> {
+impl Bloom {
     /// Create a new bloom filter structure.
     /// bitmap_size is the size in bytes (not bits) that will be allocated in
     /// memory items_count is an estimation of the maximum number of items
@@ -68,7 +66,6 @@ impl<T: ?Sized> Bloom<T> {
             bitmap_bits,
             k_num,
             sips,
-            _phantom: PhantomData,
         }
     }
 
@@ -118,7 +115,6 @@ impl<T: ?Sized> Bloom<T> {
             bitmap_bits,
             k_num,
             sips,
-            _phantom: PhantomData,
         }
     }
 
@@ -146,10 +142,7 @@ impl<T: ?Sized> Bloom<T> {
     }
 
     /// Record the presence of an item.
-    pub fn set(&mut self, item: &T)
-    where
-        T: Hash,
-    {
+    pub fn set(&mut self, item: &[u8]) {
         let mut hashes = [0u64, 0u64];
         for k_i in 0..self.k_num {
             let bit_offset = (self.bloom_hash(&mut hashes, item, k_i) % self.bitmap_bits) as usize;
@@ -159,10 +152,7 @@ impl<T: ?Sized> Bloom<T> {
 
     /// Check if an item is present in the set.
     /// There can be false positives, but no false negatives.
-    pub fn check(&self, item: &T) -> bool
-    where
-        T: Hash,
-    {
+    pub fn check(&self, item: &[u8]) -> bool {
         let mut hashes = [0u64, 0u64];
         for k_i in 0..self.k_num {
             let bit_offset = (self.bloom_hash(&mut hashes, item, k_i) % self.bitmap_bits) as usize;
@@ -175,10 +165,7 @@ impl<T: ?Sized> Bloom<T> {
 
     /// Record the presence of an item in the set,
     /// and return the previous state of this item.
-    pub fn check_and_set(&mut self, item: &T) -> bool
-    where
-        T: Hash,
-    {
+    pub fn check_and_set(&mut self, item: &[u8]) -> bool {
         let mut hashes = [0u64, 0u64];
         let mut found = true;
         for k_i in 0..self.k_num {
@@ -224,13 +211,10 @@ impl<T: ?Sized> Bloom<T> {
         cmp::max(k_num, 1)
     }
 
-    fn bloom_hash(&self, hashes: &mut [u64; 2], item: &T, k_i: u32) -> u64
-    where
-        T: Hash,
-    {
+    fn bloom_hash(&self, hashes: &mut [u64; 2], item: &[u8], k_i: u32) -> u64 {
         if k_i < 2 {
             let sip = &mut self.sips[k_i as usize].clone();
-            item.hash(sip);
+            sip.write(item);
             let hash = sip.finish();
             hashes[k_i as usize] = hash;
             hash
